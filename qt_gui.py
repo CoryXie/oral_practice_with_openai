@@ -1,7 +1,7 @@
 import sys
-from PyQt6.QtCore import QObject, pyqtSlot,Qt
-from PyQt6.QtGui import QTextCursor, QTextCharFormat,QFont,QBrush,QColor,QAction
-from PyQt6.QtWidgets import QSizePolicy,QFormLayout,QDialogButtonBox, QDialog,QApplication,QDockWidget, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QLabel,QComboBox, QLineEdit,QToolBar,QMessageBox
+from PyQt6.QtCore import QObject, pyqtSlot, Qt
+from PyQt6.QtGui import QTextCursor, QTextCharFormat, QFont, QBrush, QColor, QAction
+from PyQt6.QtWidgets import QSizePolicy, QFormLayout, QDialogButtonBox, QDialog, QApplication, QDockWidget, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QComboBox, QLineEdit, QToolBar, QMessageBox
 import azure.cognitiveservices.speech as speechsdk
 from azure.cognitiveservices.speech.audio import AudioOutputConfig
 import os
@@ -9,14 +9,19 @@ import openai
 import requests
 import time
 import json
-from core import recognize_from_mic,synthesize_to_speaker,respond,concatenate_me,concatenate_you,suggestion
+from core import recognize_from_mic, synthesize_to_speaker, respond, concatenate_me, concatenate_you, suggestion
+
+
 class bubbleLabel(QLabel):
     def __init__(self, parent=None, text='', color='white', alignment=Qt.AlignmentFlag.AlignLeft):
         super().__init__(parent)
         self.setText(text)
         self.setWordWrap(True)
         self.setAlignment(alignment)
-        self.setStyleSheet(f'background-color: {color};  color: white;font: bold 25px Arial; padding: 25px; border-radius: 25px;')
+        self.setStyleSheet(
+            f'background-color: {color};  color: white;font: bold 25px Arial; padding: 25px; border-radius: 25px;')
+
+
 class APIKeyDialog(QDialog):
     def __init__(self, azureapi=None, openaizpi=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -39,7 +44,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #set api key
+        # set api key
         try:
             with open('azureapi.txt', 'r') as f:
                 self.azureapi = f.read().strip()
@@ -55,9 +60,8 @@ class MainWindow(QMainWindow):
                 with open('openaiapi.txt', 'w') as f:
                     f.write(self.openaiapi)
 
-        
-        
-        self.lang="zh-CN"
+        self.lang = "zh-CN"
+        self.region = "eastus"
         # Create the toolbar
         self.toolbar = QToolBar("My Toolbar")
         self.addToolBar(self.toolbar)
@@ -67,7 +71,7 @@ class MainWindow(QMainWindow):
         Text_vis = QAction("Text visibility", self)
         self.toolbar.addAction(Text_vis)
         Text_vis.triggered.connect(self.Text_vis_func)
-        #set circumstances
+        # set circumstances
         self.conversation1 = ""
         self.conversation = ""
         self.is_conversation_set = False
@@ -84,11 +88,13 @@ QLineEdit {
         border-radius: 5px;
     }
 """)
-        self.setWindowTitle("French Practice Application")
-        #choose language
+        self.setWindowTitle("Language Practice Application")
+        # choose language
         self.language_combo_box = QComboBox(self)
-        self.language_combo_box.addItems(["Chinese", "English", "French", "Japanese"])
-        self.language_combo_box.currentIndexChanged.connect(self.change_language)
+        self.language_combo_box.addItems(
+            ["Chinese", "English", "French", "Japanese"])
+        self.language_combo_box.currentIndexChanged.connect(
+            self.change_language)
         self.language_combo_box.setStyleSheet("""
     QComboBox {
         background-color: white;
@@ -117,17 +123,17 @@ QLineEdit {
         selection-background-color: lightgray;
     }
 """)
-        
+
         self.setFixedSize(800, 900)
 
         # Create the text edit widget
         self.text_edit = QTextEdit(self)
         self.text_edit.setReadOnly(True)
-        #fix size when hide
+        # fix size when hide
         size_policy = self.text_edit.sizePolicy()
         size_policy.setRetainSizeWhenHidden(True)
         self.text_edit.setSizePolicy(size_policy)
-        #self.text_edit.setMaximumSize(self.text_edit.sizeHint())
+        # self.text_edit.setMaximumSize(self.text_edit.sizeHint())
         self.text_edit.setStyleSheet("""
     QTextEdit {
         background-color: white;
@@ -143,7 +149,8 @@ QLineEdit {
         # Create the "Speak" button
         self.speak_button = QPushButton("Speak", self)
         self.speak_button.clicked.connect(self.speak)
-        self.speak_button.setStyleSheet("QPushButton { background-color: grey; border-radius: 20px; padding: 10px; color:white; font-size:20px;} QPushButton:hover { background-color: red; } QPushButton:pressed { background-color: green; }")
+        self.speak_button.setStyleSheet(
+            "QPushButton { background-color: grey; border-radius: 20px; padding: 10px; color:white; font-size:20px;} QPushButton:hover { background-color: red; } QPushButton:pressed { background-color: green; }")
         # Create the "Clear" button
         self.clear_button = QPushButton("Clear", self)
         self.clear_button.clicked.connect(self.clear_text)
@@ -165,14 +172,16 @@ QLineEdit {
         self.central_widget = QWidget()
         self.central_widget.setLayout(self.layout)
         self.setCentralWidget(self.central_widget)
-    
-        #for side windows
-        self.side_window = QDockWidget("suggestion", self)       
-        self.side_window.setGeometry(self.x() + self.width(), self.y(), 400, 400)
-        #self.side_window.setAllowedAreas(Qt.RightDockWidgetArea)
-        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.side_window)
-        
-        self.side_widget = QWidget(self.side_window) #set layout
+
+        # for side windows
+        self.side_window = QDockWidget("suggestion", self)
+        self.side_window.setGeometry(
+            self.x() + self.width(), self.y(), 400, 400)
+        # self.side_window.setAllowedAreas(Qt.RightDockWidgetArea)
+        self.addDockWidget(
+            Qt.DockWidgetArea.TopDockWidgetArea, self.side_window)
+
+        self.side_widget = QWidget(self.side_window)  # set layout
         layout = QVBoxLayout(self.side_widget)
         self.side_widget.setLayout(layout)
         self.side_window.setWidget(self.side_widget)
@@ -182,44 +191,50 @@ QLineEdit {
         self.toolbar.addAction(self.tips_action)
         self.label = QLabel(self.side_window)
         self.side_widget.layout().addWidget(self.label)
-        
+
         # Update the label text
-        #self.label.setText("New Text")
-        
-        #mode selector
+        # self.label.setText("New Text")
+
+        # mode selector
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["high Intelligence", "medium Intelligence", "low Intelligence"])
+        self.mode_selector.addItems(
+            ["high Intelligence", "medium Intelligence", "low Intelligence"])
         self.mode_selector.currentIndexChanged.connect(self.mode_changed)
 
         self.toolbar = self.addToolBar("Intelligence")
         self.toolbar.addWidget(self.mode_selector)
-        self.respond_mod="text-davinci-003"
-        self.sugg_mod="text-davinci-003"
+        self.respond_mod = "text-davinci-003"
+        self.sugg_mod = "text-davinci-003"
 
     def Text_vis_func(self):
         self.text_edit.setVisible(not self.text_edit.isVisible())
+
     def mode_changed(self, index):
-        if index==0:
-            self.respond_mod="text-davinci-003"
-            self.sugg_mod="text-davinci-003"
-        elif index==1:
-            self.respond_mod="text-davinci-003"
-            self.sugg_mod="text-curie-001"
+        if index == 0:
+            self.respond_mod = "text-davinci-003"
+            self.sugg_mod = "text-davinci-003"
+        elif index == 1:
+            self.respond_mod = "text-davinci-003"
+            self.sugg_mod = "text-curie-001"
         else:
-            self.respond_mod="text-curie-001"
-            self.sugg_mod="text-curie-001"
+            self.respond_mod = "text-curie-001"
+            self.sugg_mod = "text-curie-001"
+
     def toggle_side_window(self):
         if not self.side_window.isVisible():
             self.side_window.show()
-            
 
     def display_author_info(self):
-        QMessageBox.information(self, "Author Information", "Author: Bowen ZHU\nEmail: bowen.zhu@student-cs.fr")
+        QMessageBox.information(
+            self, "Author Information", "Author: Bowen ZHU\nEmail: bowen.zhu@student-cs.fr")
+
     def closeEvent(self, event):
         QApplication.quit()
+
     @pyqtSlot()
     def update_conversation(self):
         self.conversation1 = self.input_conversation.text()
+
     @pyqtSlot()
     def change_language(self):
         current_language = self.language_combo_box.currentText()
@@ -231,6 +246,7 @@ QLineEdit {
             self.lang = "fr-FR"
         elif current_language == "Japanese":
             self.lang = "ja-JP"
+
     @pyqtSlot()
     def append_text(self, text, color):
         cursor = self.text_edit.textCursor()
@@ -246,12 +262,13 @@ QLineEdit {
         cursor.insertText(text)
         self.text_edit.setTextCursor(cursor)
         self.text_edit.ensureCursorVisible()
+
     @pyqtSlot()
     def speak(self):
         if not self.is_conversation_set:
-            self.conversation=self.conversation1
-        new_me=recognize_from_mic(self.lang,self.azureapi)
-        self.conversation=concatenate_me(self.conversation,new_me)
+            self.conversation = self.conversation1
+        new_me = recognize_from_mic(self.lang, self.azureapi, self.region)
+        self.conversation = concatenate_me(self.conversation, new_me)
         print(self.conversation)
         self.append_text("You said: " + new_me, "blue")
         # self.user_bubble = bubbleLabel(text="Me: " + new_me, color='blue')
@@ -259,36 +276,39 @@ QLineEdit {
         # user_bubble_layout.addWidget(self.user_bubble)
         # self.central_widget.layout().addLayout(user_bubble_layout)
         # self.layout.addLayout(user_bubble_layout)
-        new_you=respond(self.conversation,self.respond_mod, self.openaiapi )
+        new_you = respond(self.conversation, self.respond_mod, self.openaiapi)
         self.append_text("AI: " + new_you.replace('\n', ''), "green")
-        synthesize_to_speaker(new_you,self.lang,self.azureapi)
-        
-        self.conversation=concatenate_you(self.conversation,new_you)
+        synthesize_to_speaker(new_you, self.lang, self.azureapi, self.region)
+
+        self.conversation = concatenate_you(self.conversation, new_you)
         self.is_conversation_set = True
         time.sleep(0)
         old_layout = self.side_widget.layout().takeAt(0)
         if old_layout is not None:
             old_widget = old_layout.widget()
-            
+
             if old_widget is not None:
                 old_widget.deleteLater()
-        self.conversation_sugg=self.conversation+'\nME:'
-        sugg=suggestion(self.conversation_sugg,self.sugg_mod, self.openaiapi )
-        self.ai_bubble = bubbleLabel(text=sugg.replace('\n', ''), color='green')
+        self.conversation_sugg = self.conversation+'\nME:'
+        sugg = suggestion(self.conversation_sugg,
+                          self.sugg_mod, self.openaiapi)
+        self.ai_bubble = bubbleLabel(
+            text=sugg.replace('\n', ''), color='green')
         ai_bubble_layout = QHBoxLayout()
         ai_bubble_layout.addWidget(self.ai_bubble)
         self.side_widget.layout().addLayout(ai_bubble_layout)
         # print(sugg)
         # self.label.setText(str(sugg))
-        
+
     @pyqtSlot()
     def clear_text(self):
         self.text_edit.clear()
-        self.conversation=''
+        self.conversation = ''
         self.is_conversation_set = False
 
+
 app = QApplication(sys.argv)
-#app.setStyleSheet("QMainWindow {background-color: #2b2b2b; color: white;}")
+# app.setStyleSheet("QMainWindow {background-color: #2b2b2b; color: white;}")
 window = MainWindow()
 window.show()
 app.quit()
