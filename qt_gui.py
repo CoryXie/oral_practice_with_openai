@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtCore import QObject, pyqtSlot, Qt
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, Qt
 from PyQt6.QtGui import QTextCursor, QTextCharFormat, QFont, QBrush, QColor, QAction
 from PyQt6.QtWidgets import QSizePolicy, QFormLayout, QDialogButtonBox, QDialog, QApplication, QDockWidget, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QComboBox, QLineEdit, QToolBar, QMessageBox
 import azure.cognitiveservices.speech as speechsdk
@@ -41,6 +41,7 @@ class APIKeyDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
+    work_requested = pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -149,8 +150,28 @@ QLineEdit {
         # Create the "Speak" button
         self.speak_button = QPushButton("Speak", self)
         self.speak_button.clicked.connect(self.speak)
-        self.speak_button.setStyleSheet(
-            "QPushButton { background-color: grey; border-radius: 20px; padding: 10px; color:white; font-size:20px;} QPushButton:hover { background-color: red; } QPushButton:pressed { background-color: green; }")
+        self.speak_button.setStyleSheet("""
+QPushButton {
+    background-color: green;
+    border-radius: 20px;
+    padding: 10px;
+    color:white;
+    font-size:20px;
+    }
+
+QPushButton:hover {
+    background-color: red;
+    }
+
+QPushButton:pressed {
+    background-color: cyan;
+    }
+
+QPushButton:disabled {
+    background-color: grey;
+}
+""")
+
         # Create the "Clear" button
         self.clear_button = QPushButton("Clear", self)
         self.clear_button.clicked.connect(self.clear_text)
@@ -205,6 +226,49 @@ QLineEdit {
         self.toolbar.addWidget(self.mode_selector)
         self.respond_mod = "text-davinci-003"
         self.sugg_mod = "text-davinci-003"
+
+        self.worker_thread = QThread()
+        # start the thread
+        self.worker_thread.start()
+
+    def speak(self):
+        # Disable "Speak" button
+        self.speak_button.setEnabled(False)
+        if not self.is_conversation_set:
+            self.conversation = self.conversation1
+        # creat a worker
+        self.worker = Worker(self.azureapi, self.region, self.openaiapi, self.conversation, self.lang, self.respond_mod, self.sugg_mod)
+        self.worker.userinput.connect(self.update_userinput)
+        self.worker.airespond.connect(self.update_airespond)
+        self.worker.aisuggest.connect(self.update_aisuggest)
+
+        self.work_requested.connect(self.worker.do_work)
+
+        # move worker to the worker thread
+        self.worker.moveToThread(self.worker_thread)
+
+        self.work_requested.emit()
+
+    def update_userinput(self, userspeak):
+        self.append_text("You said: " + userspeak, "blue")
+        self.is_conversation_set = True
+
+    def update_airespond(self, aispeak):
+        self.append_text("You said: " + aispeak, "blue")
+
+    def update_aisuggest(self, suggest):
+        old_layout = self.side_widget.layout().takeAt(0)
+        if old_layout is not None:
+            old_widget = old_layout.widget()
+
+            if old_widget is not None:
+                old_widget.deleteLater()
+        self.ai_bubble = bubbleLabel(text=suggest.replace('\n', ''), color='green')
+        ai_bubble_layout = QHBoxLayout()
+        ai_bubble_layout.addWidget(self.ai_bubble)
+        self.side_widget.layout().addLayout(ai_bubble_layout)
+        # Enable "Speak" button
+        self.speak_button.setEnabled(True)
 
     def Text_vis_func(self):
         self.text_edit.setVisible(not self.text_edit.isVisible())
@@ -264,47 +328,42 @@ QLineEdit {
         self.text_edit.ensureCursorVisible()
 
     @pyqtSlot()
-    def speak(self):
-        if not self.is_conversation_set:
-            self.conversation = self.conversation1
-        new_me = recognize_from_mic(self.lang, self.azureapi, self.region)
-        self.conversation = concatenate_me(self.conversation, new_me)
-        print(self.conversation)
-        self.append_text("You said: " + new_me, "blue")
-        # self.user_bubble = bubbleLabel(text="Me: " + new_me, color='blue')
-        # user_bubble_layout = QHBoxLayout()
-        # user_bubble_layout.addWidget(self.user_bubble)
-        # self.central_widget.layout().addLayout(user_bubble_layout)
-        # self.layout.addLayout(user_bubble_layout)
-        new_you = respond(self.conversation, self.respond_mod, self.openaiapi)
-        self.append_text("AI: " + new_you.replace('\n', ''), "green")
-        synthesize_to_speaker(new_you, self.lang, self.azureapi, self.region)
-
-        self.conversation = concatenate_you(self.conversation, new_you)
-        self.is_conversation_set = True
-        time.sleep(0)
-        old_layout = self.side_widget.layout().takeAt(0)
-        if old_layout is not None:
-            old_widget = old_layout.widget()
-
-            if old_widget is not None:
-                old_widget.deleteLater()
-        self.conversation_sugg = self.conversation+'\nME:'
-        sugg = suggestion(self.conversation_sugg,
-                          self.sugg_mod, self.openaiapi)
-        self.ai_bubble = bubbleLabel(
-            text=sugg.replace('\n', ''), color='green')
-        ai_bubble_layout = QHBoxLayout()
-        ai_bubble_layout.addWidget(self.ai_bubble)
-        self.side_widget.layout().addLayout(ai_bubble_layout)
-        # print(sugg)
-        # self.label.setText(str(sugg))
-
-    @pyqtSlot()
     def clear_text(self):
         self.text_edit.clear()
         self.conversation = ''
         self.is_conversation_set = False
+
+
+class Worker(QObject):
+    userinput = pyqtSignal(str)
+    airespond = pyqtSignal(str)
+    aisuggest = pyqtSignal(str)
+
+    def __init__(self, azureapi=None, region=None, openaiapi=None, conversation=None, lang=None, respond_mod=None, sugg_mod=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.azureapi = azureapi
+        self.openaiapi = openaiapi
+        self.conversation = conversation
+        self.lang = lang
+        self.region = region
+        self.respond_mod = respond_mod
+        self.sugg_mod = sugg_mod
+
+    @pyqtSlot()
+    def do_work(self):
+        new_me = recognize_from_mic(self.lang, self.azureapi, self.region)
+        self.conversation = concatenate_me(self.conversation, new_me)
+        print(self.conversation)
+        self.userinput.emit(new_me)
+
+        new_you = respond(self.conversation, self.respond_mod, self.openaiapi)
+        self.airespond.emit(new_you)
+        synthesize_to_speaker(new_you, self.lang, self.azureapi, self.region)
+
+        self.conversation = concatenate_you(self.conversation, new_you)
+        suggest = self.conversation+'\nME:'
+        sugg = suggestion(suggest, self.sugg_mod, self.openaiapi)
+        self.aisuggest.emit(sugg)
 
 
 app = QApplication(sys.argv)
