@@ -250,11 +250,11 @@ QPushButton:disabled {
         self.work_requested.emit()
 
     def update_userinput(self, userspeak):
-        self.append_text("You said: " + userspeak, "blue")
+        self.append_text("YOU: " + userspeak, "blue")
         self.is_conversation_set = True
 
     def update_airespond(self, aispeak):
-        self.append_text("You said: " + aispeak, "blue")
+        self.append_text("GPT: " + aispeak, "green")
 
     def update_aisuggest(self, suggest):
         old_layout = self.side_widget.layout().takeAt(0)
