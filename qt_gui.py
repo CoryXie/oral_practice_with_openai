@@ -1,7 +1,7 @@
 import sys
-from PyQt5.QtCore import QObject, pyqtSlot,Qt
-from PyQt5.QtGui import QTextCursor, QTextCharFormat,QFont,QBrush,QColor
-from PyQt5.QtWidgets import QSizePolicy,QFormLayout,QDialogButtonBox, QDialog,QApplication,QDockWidget, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QLabel,QComboBox, QLineEdit,QToolBar,QAction,QMessageBox
+from PyQt6.QtCore import QObject, pyqtSlot,Qt
+from PyQt6.QtGui import QTextCursor, QTextCharFormat,QFont,QBrush,QColor,QAction
+from PyQt6.QtWidgets import QSizePolicy,QFormLayout,QDialogButtonBox, QDialog,QApplication,QDockWidget, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QLabel,QComboBox, QLineEdit,QToolBar,QMessageBox
 import azure.cognitiveservices.speech as speechsdk
 from azure.cognitiveservices.speech.audio import AudioOutputConfig
 import os
@@ -11,7 +11,7 @@ import time
 import json
 from core import recognize_from_mic,synthesize_to_speaker,respond,concatenate_me,concatenate_you,suggestion
 class bubbleLabel(QLabel):
-    def __init__(self, parent=None, text='', color='white', alignment=Qt.AlignLeft):
+    def __init__(self, parent=None, text='', color='white', alignment=Qt.AlignmentFlag.AlignLeft):
         super().__init__(parent)
         self.setText(text)
         self.setWordWrap(True)
@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
                 self.openaiapi = f.read().strip()
         except FileNotFoundError:
             api_dialog = APIKeyDialog()
-            if api_dialog.exec_() == QDialog.Accepted:
+            if api_dialog.exec() == QDialog.DialogCode.Accepted:
                 self.azureapi = api_dialog.az_edit.text().strip()
                 self.openaiapi = api_dialog.op_edit.text().strip()
                 with open('azureapi.txt', 'w') as f:
@@ -170,7 +170,7 @@ QLineEdit {
         self.side_window = QDockWidget("suggestion", self)       
         self.side_window.setGeometry(self.x() + self.width(), self.y(), 400, 400)
         #self.side_window.setAllowedAreas(Qt.RightDockWidgetArea)
-        self.addDockWidget(Qt.TopDockWidgetArea, self.side_window)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.side_window)
         
         self.side_widget = QWidget(self.side_window) #set layout
         layout = QVBoxLayout(self.side_widget)
@@ -234,7 +234,7 @@ QLineEdit {
     @pyqtSlot()
     def append_text(self, text, color):
         cursor = self.text_edit.textCursor()
-        cursor.movePosition(QTextCursor.End)
+        cursor.movePosition(QTextCursor.MoveOperation.End)
         cursor.insertBlock()
         charFormat = cursor.charFormat()
         charFormat.setForeground(QBrush(QColor(color)))
@@ -292,5 +292,5 @@ app = QApplication(sys.argv)
 window = MainWindow()
 window.show()
 app.quit()
-sys.exit(app.exec_())
+sys.exit(app.exec())
 sys.exit(0)
