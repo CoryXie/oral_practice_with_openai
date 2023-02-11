@@ -41,7 +41,7 @@ class APIKeyDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    work_requested = pyqtSignal()
+    work_requested = pyqtSignal(str)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -228,16 +228,9 @@ QPushButton:disabled {
         self.sugg_mod = "text-davinci-003"
 
         self.worker_thread = QThread()
-        # start the thread
-        self.worker_thread.start()
 
-    def speak(self):
-        # Disable "Speak" button
-        self.speak_button.setEnabled(False)
-        if not self.is_conversation_set:
-            self.conversation = self.conversation1
         # creat a worker
-        self.worker = Worker(self.azureapi, self.region, self.openaiapi, self.conversation, self.lang, self.respond_mod, self.sugg_mod)
+        self.worker = Worker(self.azureapi, self.region, self.openaiapi, self.lang, self.respond_mod, self.sugg_mod)
         self.worker.userinput.connect(self.update_userinput)
         self.worker.airespond.connect(self.update_airespond)
         self.worker.aisuggest.connect(self.update_aisuggest)
@@ -247,7 +240,16 @@ QPushButton:disabled {
         # move worker to the worker thread
         self.worker.moveToThread(self.worker_thread)
 
-        self.work_requested.emit()
+        # start the thread
+        self.worker_thread.start()
+
+    def speak(self):
+        # Disable "Speak" button
+        self.speak_button.setEnabled(False)
+        if not self.is_conversation_set:
+            self.conversation = self.conversation1
+
+        self.work_requested.emit(self.conversation)
 
     def update_userinput(self, userspeak):
         self.append_text("YOU: " + userspeak, "blue")
@@ -339,29 +341,28 @@ class Worker(QObject):
     airespond = pyqtSignal(str)
     aisuggest = pyqtSignal(str)
 
-    def __init__(self, azureapi=None, region=None, openaiapi=None, conversation=None, lang=None, respond_mod=None, sugg_mod=None, *args, **kwargs):
+    def __init__(self, azureapi=None, region=None, openaiapi=None, lang=None, respond_mod=None, sugg_mod=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.azureapi = azureapi
         self.openaiapi = openaiapi
-        self.conversation = conversation
         self.lang = lang
         self.region = region
         self.respond_mod = respond_mod
         self.sugg_mod = sugg_mod
 
-    @pyqtSlot()
-    def do_work(self):
+    @pyqtSlot(str)
+    def do_work(self, conversation):
         new_me = recognize_from_mic(self.lang, self.azureapi, self.region)
-        self.conversation = concatenate_me(self.conversation, new_me)
-        print(self.conversation)
+        conversation = concatenate_me(conversation, new_me)
+        print(conversation)
         self.userinput.emit(new_me)
 
-        new_you = respond(self.conversation, self.respond_mod, self.openaiapi)
+        new_you = respond(conversation, self.respond_mod, self.openaiapi)
         self.airespond.emit(new_you)
         synthesize_to_speaker(new_you, self.lang, self.azureapi, self.region)
 
-        self.conversation = concatenate_you(self.conversation, new_you)
-        suggest = self.conversation+'\nME:'
+        conversation = concatenate_you(conversation, new_you)
+        suggest = conversation+'\nME:'
         sugg = suggestion(suggest, self.sugg_mod, self.openaiapi)
         self.aisuggest.emit(sugg)
 
