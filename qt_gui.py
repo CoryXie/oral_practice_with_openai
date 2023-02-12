@@ -41,7 +41,7 @@ class APIKeyDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    work_requested = pyqtSignal(str)
+    work_requested = pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -73,8 +73,7 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(Text_vis)
         Text_vis.triggered.connect(self.Text_vis_func)
         # set circumstances
-        self.conversation1 = ""
-        self.conversation = ""
+        self.conversation_initial = ""
         self.is_conversation_set = False
         self.input_conversation = QLineEdit(self)
         self.input_conversation.setPlaceholderText("Enter the initial setting")
@@ -230,7 +229,8 @@ QPushButton:disabled {
         self.worker_thread = QThread()
 
         # creat a worker
-        self.worker = Worker(self.azureapi, self.region, self.openaiapi, self.lang, self.respond_mod, self.sugg_mod)
+        self.worker = Worker(self.azureapi, self.region, self.openaiapi,
+                             self.lang, self.respond_mod, self.sugg_mod)
         self.worker.userinput.connect(self.update_userinput)
         self.worker.airespond.connect(self.update_airespond)
         self.worker.aisuggest.connect(self.update_aisuggest)
@@ -247,25 +247,29 @@ QPushButton:disabled {
         # Disable "Speak" button
         self.speak_button.setEnabled(False)
         if not self.is_conversation_set:
-            self.conversation = self.conversation1
+            self.worker.conversation = self.conversation_initial
 
-        self.work_requested.emit(self.conversation)
+        self.work_requested.emit()
 
     def update_userinput(self, userspeak):
         self.append_text("YOU: " + userspeak, "blue")
+        print("YOU: " + userspeak)
         self.is_conversation_set = True
 
     def update_airespond(self, aispeak):
         self.append_text("GPT: " + aispeak, "green")
+        print("GPT: " + aispeak)
 
     def update_aisuggest(self, suggest):
+        print("TRY: " + suggest)
         old_layout = self.side_widget.layout().takeAt(0)
         if old_layout is not None:
             old_widget = old_layout.widget()
 
             if old_widget is not None:
                 old_widget.deleteLater()
-        self.ai_bubble = bubbleLabel(text=suggest.replace('\n', ''), color='green')
+        self.ai_bubble = bubbleLabel(
+            text=suggest.replace('\n', ''), color='green')
         ai_bubble_layout = QHBoxLayout()
         ai_bubble_layout.addWidget(self.ai_bubble)
         self.side_widget.layout().addLayout(ai_bubble_layout)
@@ -285,6 +289,8 @@ QPushButton:disabled {
         else:
             self.respond_mod = "text-curie-001"
             self.sugg_mod = "text-curie-001"
+        self.worker.sugg_mod = self.sugg_mod
+        self.worker.respond_mod = self.respond_mod
 
     def toggle_side_window(self):
         if not self.side_window.isVisible():
@@ -299,7 +305,8 @@ QPushButton:disabled {
 
     @pyqtSlot()
     def update_conversation(self):
-        self.conversation1 = self.input_conversation.text()
+        self.conversation_initial = self.input_conversation.text()
+        self.worker.conversation = self.conversation_initial
 
     @pyqtSlot()
     def change_language(self):
@@ -312,6 +319,7 @@ QPushButton:disabled {
             self.lang = "fr-FR"
         elif current_language == "Japanese":
             self.lang = "ja-JP"
+        self.worker.lang = self.lang
 
     @pyqtSlot()
     def append_text(self, text, color):
@@ -332,7 +340,7 @@ QPushButton:disabled {
     @pyqtSlot()
     def clear_text(self):
         self.text_edit.clear()
-        self.conversation = ''
+        self.worker.conversation = ''
         self.is_conversation_set = False
 
 
@@ -349,21 +357,21 @@ class Worker(QObject):
         self.region = region
         self.respond_mod = respond_mod
         self.sugg_mod = sugg_mod
+        self.conversation = ""
 
-    @pyqtSlot(str)
-    def do_work(self, conversation):
+    @pyqtSlot()
+    def do_work(self):
         new_me = recognize_from_mic(self.lang, self.azureapi, self.region)
-        conversation = concatenate_me(conversation, new_me)
-        print(conversation)
+        self.conversation = concatenate_me(self.conversation, new_me)
         self.userinput.emit(new_me)
 
-        new_you = respond(conversation, self.respond_mod, self.openaiapi)
+        new_you = respond(self.conversation, self.respond_mod, self.openaiapi)
         self.airespond.emit(new_you)
         synthesize_to_speaker(new_you, self.lang, self.azureapi, self.region)
 
-        conversation = concatenate_you(conversation, new_you)
-        suggest = conversation+'\nME:'
-        sugg = suggestion(suggest, self.sugg_mod, self.openaiapi)
+        self.conversation = concatenate_you(self.conversation, new_you)
+        sugg = suggestion(self.conversation + '\nME:',
+                          self.sugg_mod, self.openaiapi)
         self.aisuggest.emit(sugg)
 
 

@@ -22,9 +22,7 @@ def recognize_from_mic(lang, key, region):
     speech_config.speech_recognition_language = lang
     speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config)
     # Asks user for mic input and prints transcription result on screen
-    print("Speak into your microphone.")
     result = speech_recognizer.recognize_once_async().get()
-    print('Me:'+result.text)
     return result.text
 
 
